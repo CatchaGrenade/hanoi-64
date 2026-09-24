@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>64盘汉诺塔 · 一个需要5849亿年的实验</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #050508;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #e0e0e0;
+    user-select: none;
+  }
+  canvas { display: block; }
+
+  .hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 18px 26px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
+    pointer-events: none;
+    z-index: 10;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .left { display: flex; flex-direction: column; gap: 5px; }
+  .label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .big-num {
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: #ffd166;
+    text-shadow: 0 0 20px rgba(255,209,102,0.35);
+    letter-spacing: 1px;
+    line-height: 1.1;
+  }
+  .stat {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    font-family: monospace;
+  }
+  .stat span { color: #6bcf7f; }
+
+  .right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    text-align: right;
+  }
+  .total-label { font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 1px; }
+  .total-num { font-family: monospace; font-size: 13px; color: rgba(255,255,255,0.75); }
+  .eta { margin-top: 6px; font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 1px; }
+  .eta strong { color: #ef476f; font-family: monospace; font-size: 13px; }
+
+  .bottom {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 14px 26px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+    pointer-events: none;
+    z-index: 10;
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 2px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .bottom .moved { font-family: monospace; color: rgba(255,255,255,0.6); }
+  .bottom .from { color: #ffd166; }
+  .bottom .to { color: #6bcf7f; }
+
+  .progress-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.05);
+    z-index: 11;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ffd166, #ef476f);
+    width: 0%;
+    box-shadow: 0 0 10px rgba(239,71,111,0.5);
+    transition: width 0.3s linear;
+  }
+
+  .epoch {
+    position: fixed;
+    bottom: 42px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 2px;
+    z-index: 10;
+    pointer-events: none;
+    font-family: monospace;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  /* ============ 倒计时层 ============ */
+  .countdown {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    background: radial-gradient(circle at 50% 45%, rgba(10,10,25,0.85), rgba(3,3,8,0.95));
+    backdrop-filter: blur(2px);
+    transition: opacity 0.8s ease, visibility 0.8s;
+  }
+  .countdown.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .cd-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 22px;
+  }
+  .cd-timer {
+    display: flex;
+    gap: 20px;
+    align-items: baseline;
+    margin-bottom: 26px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .cd-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 90px;
+  }
+  .cd-num {
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 52px;
+    font-weight: 700;
+    color: #ffd166;
+    text-shadow: 0 0 30px rgba(255,209,102,0.4);
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .cd-num.sec {
+    color: #ef476f;
+    text-shadow: 0 0 30px rgba(239,71,111,0.5);
+  }
+  .cd-name {
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 3px;
+    margin-top: 8px;
+  }
+  .cd-sep {
+    font-size: 40px;
+    color: rgba(255,255,255,0.15);
+    font-weight: 300;
+    align-self: center;
+    margin-bottom: 20px;
+  }
+  .cd-date {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 2px;
+    font-family: monospace;
+    margin-bottom: 8px;
+  }
+  .cd-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 3px;
+    margin-top: 8px;
+  }
+  .cd-title {
+    position: absolute;
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+  }
+  .cd-title .zh {
+    font-size: 17px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 10px;
+    margin-bottom: 8px;
+  }
+  .cd-title .en {
+    font-size: 11px;
+    color: rgba(255,255,255,0.15);
+    letter-spacing: 5px;
+    font-family: monospace;
+  }
+
+  @media (max-width: 600px) {
+    .big-num { font-size: 20px; }
+    .hud { padding: 12px 16px; }
+    .bottom { padding: 10px 16px; font-size: 10px; }
+    .epoch { font-size: 9px; bottom: 36px; }
+    .cd-num { font-size: 32px; }
+    .cd-unit { min-width: 60px; }
+    .cd-sep { font-size: 24px; }
+    .cd-title .zh { font-size: 13px; letter-spacing: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="hud">
+  <div class="left">
+    <div class="label" id="hudLabel">已移动步数</div>
+    <div class="big-num" id="stepCount">0</div>
+    <div class="stat" id="hudStat">等待启动</div>
+  </div>
+  <div class="right">
+    <div class="total-label">总步数 2⁶⁴ − 1</div>
+    <div class="total-num">18,446,744,073,709,551,615</div>
+    <div class="eta">剩余时间 <strong id="eta">5849 亿年</strong></div>
+  </div>
+</div>
+
+<div class="bottom">
+  <span>最近一步：<span class="moved" id="lastMove">—</span></span>
+  <span>A → B → C 三柱 · 每秒一步 · 永不停歇</span>
+</div>
+
+<div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+
+<div class="epoch" id="epoch">—</div>
+
+<!-- ============ 倒计时层 ============ -->
+<div class="countdown" id="countdown">
+  <div class="cd-title">
+    <div class="zh">一个需要 5849 亿年的实验</div>
+    <div class="en">HANOI · 64 DISKS · 1 MOVE / SEC</div>
+  </div>
+
+  <div class="cd-label">Distance to First Move</div>
+
+  <div class="cd-timer">
+    <div class="cd-unit">
+      <div class="cd-num" id="cdDays">--</div>
+      <div class="cd-name">天</div>
+    </div>
+    <div class="cd-sep">:</div>
+    <div class="cd-unit">
+      <div class="cd-num" id="cdHours">--</div>
+      <div class="cd-name">时</div>
+    </div>
+    <div class="cd-sep">:</div>
+    <div class="cd-unit">
+      <div class="cd-num" id="cdMinutes">--</div>
+      <div class="cd-name">分</div>
+    </div>
+    <div class="cd-sep">:</div>
+    <div class="cd-unit">
+      <div class="cd-num sec" id="cdSeconds">--</div>
+      <div class="cd-name">秒</div>
+    </div>
+  </div>
+
+  <div class="cd-date" id="cdDate">—</div>
+  <div class="cd-hint">盘中 64 个盘子已就位 · 等待第一步</div>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // ============================================================
+  // ⚠️ 实验启动时间（UTC）
+  //    2026-10-24 00:00:00 UTC = 程序员日 1024
+  // ============================================================
+  const START_TIME = new Date('2026-10-24T00:00:00Z').getTime();
+  // ============================================================
+
+  const N = 64;
+  const TOTAL = (1n << 64n) - 1n;
+  const PEG_NAMES = ['A', 'B', 'C'];
+
+  // 显示纪元
+  (function showEpoch() {
+    const d = new Date(START_TIME);
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('epoch').textContent =
+      `实验启动于 ${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ` +
+      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC · 永不重置`;
+    document.getElementById('cdDate').textContent =
+      `${d.getUTCFullYear()} 年 ${pad(d.getUTCMonth()+1)} 月 ${pad(d.getUTCDate())} 日 ` +
+      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+  })();
+
+  // ==================== 快速状态计算 ====================
+  function getState(n, S, from, to, aux, pos) {
+    if (n === 0) return;
+    const mid = 1n << BigInt(n - 1);
+    if (S < mid) {
+      pos[n] = from;
+      getState(n - 1, S, from, aux, to, pos);
+    } else {
+      pos[n] = to;
+      getState(n - 1, S - mid, aux, to, from, pos);
+    }
+  }
+
+  let currentStep = -1n;
+  let currentPos = null;
+  let previousPos = null;
+  let moveAnim = null;
+  let started = false;
+
+  function computeState(step) {
+    const pos = new Array(N + 1);
+    if (step < 0n) {
+      // 未开始：所有盘子都在 A 柱
+      for (let k = 1; k <= N; k++) pos[k] = 0;
+      return pos;
+    }
+    getState(N, step, 0, 2, 1, pos);
+    return pos;
+  }
+
+  // ==================== 尺寸 ====================
+  let W, H, dpr;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // ==================== 布局 ====================
+  function layout() {
+    const baseY = H * 0.92;
+    const diskH = Math.max(2.5, Math.min(H * 0.62 / N, 14));
+    const pegTopY = baseY - diskH * N - diskH * 2;
+    const pegW = Math.max(4, Math.min(W * 0.007, 10));
+    const maxDiskW = Math.min(W * 0.24, 320);
+    const minDiskW = Math.max(14, pegW * 2.2);
+    return { baseY, diskH, pegTopY, pegW, maxDiskW, minDiskW };
+  }
+
+  const pegX = i => W * (1 / 6 + i * 2 / 6);
+  const diskW = (size, L) => L.minDiskW + (size - 1) / (N - 1) * (L.maxDiskW - L.minDiskW);
+  const diskY = (stackIdx, L) => L.baseY - L.diskH * (stackIdx + 0.5);
+
+  // ==================== 绘制 ====================
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawDisk(cx, cy, size, L, opts = {}) {
+    const w = diskW(size, L);
+    const h = L.diskH;
+    const left = cx - w / 2;
+    const top = cy - h / 2;
+    const hue = ((size - 1) / (N - 1)) * 300;
+
+    if (opts.glow) {
+      ctx.save();
+      ctx.shadowColor = `hsla(${hue}, 90%, 65%, 0.9)`;
+      ctx.shadowBlur = 24;
+    }
+
+    const grad = ctx.createLinearGradient(0, top, 0, top + h);
+    grad.addColorStop(0,   `hsl(${hue}, 78%, 62%)`);
+    grad.addColorStop(0.5, `hsl(${hue}, 70%, 50%)`);
+    grad.addColorStop(1,   `hsl(${hue}, 65%, 35%)`);
+    ctx.fillStyle = grad;
+    roundRect(left, top, w, h, h * 0.4);
+    ctx.fill();
+
+    if (opts.glow) ctx.restore();
+
+    if (h > 4) {
+      ctx.strokeStyle = `hsla(${hue}, 100%, 88%, 0.55)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left + 2, top + 1);
+      ctx.lineTo(left + w - 2, top + 1);
+      ctx.stroke();
+    }
+
+    if (w > 50 && h > 7) {
+      ctx.fillStyle = `hsla(${hue}, 100%, 95%, 0.75)`;
+      ctx.font = `${Math.max(8, h * 0.6)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(size, cx, cy + 0.5);
+    }
+  }
+
+  function drawTrail(L) {
+    if (!moveAnim) return;
+    const now = performance.now();
+    const t = Math.min((now - moveAnim.startTime) / moveAnim.duration, 1);
+    if (t >= 1) return;
+
+    const alpha = (1 - t) * 0.7;
+    const x0 = pegX(moveAnim.fromPeg);
+    const y0 = diskY(moveAnim.fromIdx, L);
+    const x1 = pegX(moveAnim.toPeg);
+    const y1 = diskY(moveAnim.toIdx, L);
+    const ctrlX = (x0 + x1) / 2;
+    const ctrlY = Math.min(y0, y1, L.pegTopY - 10) - L.diskH * 3;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = `hsla(${((moveAnim.disk - 1) / (N - 1)) * 300}, 90%, 65%, 1)`;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 12;
+
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.quadraticCurveTo(ctrlX, ctrlY, x1, y1);
+    ctx.stroke();
+
+    for (let i = 1; i < 8; i++) {
+      const tt = t * (i / 8);
+      const mt = 1 - tt;
+      const px = mt * mt * x0 + 2 * mt * tt * ctrlX + tt * tt * x1;
+      const py = mt * mt * y0 + 2 * mt * tt * ctrlY + tt * tt * y1;
+      const r = (1 - tt) * 2.5;
+      ctx.globalAlpha = alpha * (1 - tt) * 0.6;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function render() {
+    const L = layout();
+    const now = performance.now();
+
+    const bgGrad = ctx.createRadialGradient(
+      W / 2, H * 0.5, 0,
+      W / 2, H * 0.5, Math.max(W, H) * 0.8
+    );
+    bgGrad.addColorStop(0, '#0d0d1a');
+    bgGrad.addColorStop(0.5, '#08080f');
+    bgGrad.addColorStop(1, '#030305');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    const topGlow = ctx.createRadialGradient(W / 2, 0, 0, W / 2, 0, W * 0.6);
+    topGlow.addColorStop(0, 'rgba(90, 70, 160, 0.10)');
+    topGlow.addColorStop(1, 'rgba(90, 70, 160, 0)');
+    ctx.fillStyle = topGlow;
+    ctx.fillRect(0, 0, W, H);
+
+    const boardH = Math.max(12, L.diskH * 1.5);
+    const boardY = L.baseY;
+    const boardGrad = ctx.createLinearGradient(0, boardY, 0, boardY + boardH);
+    boardGrad.addColorStop(0, '#3a3048');
+    boardGrad.addColorStop(0.3, '#251a35');
+    boardGrad.addColorStop(1, '#0f0a18');
+    ctx.fillStyle = boardGrad;
+    ctx.fillRect(0, boardY, W, boardH);
+
+    ctx.strokeStyle = 'rgba(140, 110, 200, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, boardY);
+    ctx.lineTo(W, boardY);
+    ctx.stroke();
+
+    for (let i = 0; i < 3; i++) {
+      const px = pegX(i);
+      const pegGrad = ctx.createLinearGradient(px - L.pegW / 2, 0, px + L.pegW / 2, 0);
+      pegGrad.addColorStop(0, 'rgba(45, 35, 70, 0.9)');
+      pegGrad.addColorStop(0.5, 'rgba(160, 140, 210, 0.95)');
+      pegGrad.addColorStop(1, 'rgba(45, 35, 70, 0.9)');
+
+      ctx.fillStyle = pegGrad;
+      ctx.fillRect(px - L.pegW / 2, L.pegTopY, L.pegW, L.baseY - L.pegTopY);
+
+      ctx.beginPath();
+      ctx.arc(px, L.pegTopY, L.pegW / 2 + 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(200, 180, 240, 1)';
+      ctx.fill();
+    }
+
+    if (!currentPos) return;
+
+    const stacks = [[], [], []];
+    for (let k = N; k >= 1; k--) {
+      stacks[currentPos[k]].push(k);
+    }
+
+    let movingDisk = -1;
+    if (moveAnim) {
+      const t = (now - moveAnim.startTime) / moveAnim.duration;
+      if (t < 1) movingDisk = moveAnim.disk;
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const px = pegX(i);
+      for (let j = 0; j < stacks[i].length; j++) {
+        const size = stacks[i][j];
+        if (size === movingDisk) continue;
+        drawDisk(px, diskY(j, L), size, L);
+      }
+    }
+
+    drawTrail(L);
+
+    if (moveAnim && movingDisk > 0) {
+      const t = (now - moveAnim.startTime) / moveAnim.duration;
+      if (t < 1) {
+        const et = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        const x0 = pegX(moveAnim.fromPeg);
+        const y0 = diskY(moveAnim.fromIdx, L);
+        const x1 = pegX(moveAnim.toPeg);
+        const y1 = diskY(moveAnim.toIdx, L);
+        const ctrlX = (x0 + x1) / 2;
+        const ctrlY = Math.min(y0, y1, L.pegTopY - 10) - L.diskH * 3;
+        const mt = 1 - et;
+        const px = mt * mt * x0 + 2 * mt * et * ctrlX + et * et * x1;
+        const py = mt * mt * y0 + 2 * mt * et * ctrlY + et * et * y1;
+        drawDisk(px, py, movingDisk, L, { glow: true });
+      }
+    }
+
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(180, 160, 220, 0.45)';
+    for (let i = 0; i < 3; i++) {
+      ctx.fillText(PEG_NAMES[i], pegX(i), L.baseY + 26);
+    }
+  }
+
+  // ==================== 主循环 ====================
+  const stepEl = document.getElementById('stepCount');
+  const hudLabelEl = document.getElementById('hudLabel');
+  const hudStatEl = document.getElementById('hudStat');
+  const etaEl = document.getElementById('eta');
+  const progressEl = document.getElementById('progress');
+  const lastMoveEl = document.getElementById('lastMove');
+  const countdownEl = document.getElementById('countdown');
+  const cdDays = document.getElementById('cdDays');
+  const cdHours = document.getElementById('cdHours');
+  const cdMinutes = document.getElementById('cdMinutes');
+  const cdSeconds = document.getElementById('cdSeconds');
+
+  function formatBig(n) {
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function formatDuration(seconds) {
+    if (seconds < 60) return seconds + ' 秒';
+    if (seconds < 3600) return (seconds / 60).toFixed(1) + ' 分钟';
+    if (seconds < 86400) return (seconds / 3600).toFixed(1) + ' 小时';
+    const days = seconds / 86400;
+    if (days < 365) return days.toFixed(1) + ' 天';
+    const years = days / 365.2425;
+    if (years < 1e4) return years.toFixed(1) + ' 年';
+    if (years < 1e8) return (years / 1e4).toFixed(2) + ' 万年';
+    return (years / 1e8).toFixed(2) + ' 亿年';
+  }
+
+  function updateCountdown(now) {
+    const diff = START_TIME - now;
+
+    if (diff > 0) {
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const seconds = totalSec % 60;
+
+      const pad = n => String(n).padStart(2, '0');
+      cdDays.textContent = days;
+      cdHours.textContent = pad(hours);
+      cdMinutes.textContent = pad(minutes);
+      cdSeconds.textContent = pad(seconds);
+
+      return false;
+    }
+    return true;
+  }
+
+  function updateFromClock() {
+    const now = Date.now();
+
+    // 倒计时阶段
+    if (now < START_TIME) {
+      updateCountdown(now);
+
+      // 首次渲染：显示初始状态（全部在 A 柱）
+      if (currentStep !== -1n) {
+        currentStep = -1n;
+        currentPos = computeState(-1n);
+      }
+
+      hudLabelEl.textContent = '实验状态';
+      stepEl.textContent = '等待启动';
+      hudStatEl.innerHTML = '距第一步还有 <span id="inlineCd">—</span>';
+
+      // 更新内联倒计时
+      const diff = START_TIME - now;
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const inlineEl = document.getElementById('inlineCd');
+      if (inlineEl) {
+        inlineEl.textContent = `${days} 天 ${hours} 时 ${minutes} 分`;
+      }
+
+      etaEl.textContent = '5849 亿年';
+      progressEl.style.width = '0%';
+      return;
+    }
+
+    // 倒计时刚结束：切换 UI，隐藏倒计时层
+    if (!started) {
+      started = true;
+      countdownEl.classList.add('hidden');
+      hudLabelEl.textContent = '已移动步数';
+      hudStatEl.innerHTML = '运行时长 <span id="elapsed">0 秒</span>';
+    }
+
+    const elapsedSec = Math.floor((now - START_TIME) / 1000);
+    const step = BigInt(Math.max(0, elapsedSec));
+
+    if (step !== currentStep) {
+      previousPos = currentPos;
+      currentPos = computeState(step);
+
+      if (previousPos) {
+        for (let k = 1; k <= N; k++) {
+          if (previousPos[k] !== currentPos[k]) {
+            const fromPeg = previousPos[k];
+            const toPeg = currentPos[k];
+
+            let fromIdx = 0;
+            for (let j = k + 1; j <= N; j++) {
+              if (previousPos[j] === fromPeg) fromIdx++;
+            }
+            let toIdx = 0;
+            for (let j = k + 1; j <= N; j++) {
+              if (currentPos[j] === toPeg) toIdx++;
+            }
+
+            moveAnim = {
+              disk: k,
+              fromPeg, toPeg,
+              fromIdx, toIdx,
+              startTime: performance.now(),
+              duration: 1000,
+            };
+
+            lastMoveEl.innerHTML =
+              `盘子 ${k} &nbsp;<span class="from">${PEG_NAMES[fromPeg]}</span> → <span class="to">${PEG_NAMES[toPeg]}</span>`;
+
+            break;
+          }
+        }
+      }
+
+      currentStep = step;
+
+      stepEl.textContent = formatBig(step);
+      const elapsedEl = document.getElementById('elapsed');
+      if (elapsedEl) elapsedEl.textContent = formatDuration(elapsedSec);
+
+      const logP = Math.log10(Number(step) + 1) / Math.log10(Number(TOTAL) + 1);
+      progressEl.style.width = (logP * 100).toFixed(4) + '%';
+
+      const remaining = TOTAL - step;
+      etaEl.textContent = formatDuration(Number(remaining));
+    }
+  }
+
+  function loop() {
+    updateFromClock();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  updateFromClock();
+  loop();
+})();
+</script>
+</body>
+</html>
